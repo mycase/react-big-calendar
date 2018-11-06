@@ -99,33 +99,7 @@ function onSameRow(a, b, minimumStartDifference) {
 }
 
 function sortByRender(events) {
-  const sortedByTime = sortBy(events, ['startMs', e => -e.endMs])
-
-  const sorted = []
-  while (sortedByTime.length > 0) {
-    const event = sortedByTime.shift()
-    sorted.push(event)
-
-    for (let i = 0; i < sortedByTime.length; i++) {
-      const test = sortedByTime[i]
-
-      // Still inside this event, look for next.
-      if (event.endMs > test.startMs) continue
-
-      // We've found the first event of the next event group.
-      // If that event is not right next to our current event, we have to
-      // move it here.
-      if (i > 0) {
-        const event = sortedByTime.splice(i, 1)[0]
-        sorted.push(event)
-      }
-
-      // We've already found the next event group, so stop looking.
-      break
-    }
-  }
-
-  return sorted
+  return sortBy(events, ['startMs', e => -e.endMs])
 }
 
 function getStyledEvents({
