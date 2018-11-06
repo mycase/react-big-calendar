@@ -1,9 +1,12 @@
 {
-  "name": "react-big-calendar",
+  "name": "react-big-calendar-mycase",
   "version": "0.22.0",
   "description": "Calendar! with events",
   "author": "Jason Quense <monastic.panic@gmail.com>",
-  "repository": "intljusticemission/react-big-calendar",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/appfolio/react-big-calendar-mycase.git"
+  },
   "license": "MIT",
   "main": "lib/index.js",
   "module": "dist/react-big-calendar.esm.js",
@@ -15,6 +18,9 @@
     "README.md",
     "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "registry": "https://nexus.dev.appf.io/repository/npm-hosted/"
+  },
   "keywords": [
     "scheduler",
     "react-component",
