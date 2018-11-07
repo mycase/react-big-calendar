@@ -56,6 +56,11 @@ class Calendar extends React.Component {
     localizer: PropTypes.object.isRequired,
 
     /**
+     * A boolean to decide whether to have events in week and day views overlap or not.
+     */
+    eventOverlap: PropTypes.bool,
+
+    /**
      * Props passed to main calendar `<div>`.
      *
      */
@@ -721,6 +726,7 @@ class Calendar extends React.Component {
   }
 
   static defaultProps = {
+    eventOverlap: true,
     elementProps: {},
     popup: false,
     toolbar: true,

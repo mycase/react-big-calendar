@@ -183,17 +183,20 @@ class DayColumn extends React.Component {
       components,
       step,
       timeslots,
+      eventOverlap,
     } = this.props
 
     const { slotMetrics } = this
     const { messages } = localizer
 
-    let styledEvents = DayEventLayout.getStyledEvents({
+    let styledEvents = DayEventLayout.getStyledEvents(eventOverlap, {
       events,
       accessors,
       slotMetrics,
       minimumStartDifference: Math.ceil((step * timeslots) / 2),
     })
+
+    styledEvents = styledEvents.filter(({ _, style }) => style.width > 0)
 
     return styledEvents.map(({ event, style }, idx) => {
       let end = accessors.end(event)
@@ -372,6 +375,7 @@ DayColumn.propTypes = {
   max: PropTypes.instanceOf(Date).isRequired,
   getNow: PropTypes.func.isRequired,
   isNow: PropTypes.bool,
+  eventOverlap: PropTypes.bool,
 
   rtl: PropTypes.bool,
 
