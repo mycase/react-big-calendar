@@ -23,7 +23,6 @@ class Event {
     this.overlapping = eventOverlap
     this.overlapBuffer = 0
     this.containerXOffset = 0
-    this.childContainer = null
     this.parentContainer = null
     this.rootContainer = null
   }
@@ -111,13 +110,13 @@ class Event {
 /**
  * Return true if event a and b is considered to be on the same row.
  */
-function onSameRow(a, b, minimumStartDifference, eventOverlap) {
-  return eventOverlap
-    ? // Occupies the same start slot.
-      Math.abs(b.start - a.start) < minimumStartDifference ||
-        // A's start slot overlaps with b's end slot.
-        (b.start > a.start && b.start < a.end)
-    : true
+function onSameRow(a, b, minimumStartDifference) {
+  return (
+    // Occupies the same start slot.
+    Math.abs(b.start - a.start) < minimumStartDifference ||
+    // A's start slot overlaps with b's end slot.
+    (b.start > a.start && b.start < a.end)
+  )
 }
 
 function sortByRender(events) {
@@ -130,6 +129,7 @@ function calculateContainerOverlapBuffer(container) {
 }
 
 function assignContainerXOffsets(containerEvents) {
+  const indentOffset = 2
   if (containerEvents.length > 1) {
     containerEvents[0].containerXOffset = 0
 
@@ -140,7 +140,7 @@ function assignContainerXOffsets(containerEvents) {
         const firstEventOfPreviousContainer = previousContainer.rows[0]
         if (firstEventOfPreviousContainer.end > currentContainer.start) {
           currentContainer.containerXOffset =
-            previousContainer.containerXOffset + 2
+            previousContainer.containerXOffset + indentOffset
         } else {
           currentContainer.containerXOffset = 0
         }
@@ -159,7 +159,8 @@ function assignChildContainerXOffsets(containerEvents) {
     const leaves = parentRow.leaves
     const rowAndLeaves = [parentRow, ...leaves]
 
-    for (let i = 0; i < rowAndLeaves.length - 2; i++) {
+    // Find the X Offset of the event after the child container
+    for (let i = 0; i < rowAndLeaves.length - 1; i++) {
       if (
         currentContainer.start === rowAndLeaves[i].start &&
         currentContainer.end === rowAndLeaves[i].end
@@ -170,9 +171,17 @@ function assignChildContainerXOffsets(containerEvents) {
   })
 }
 
-function getStyledEvents(
+function getStyledEvents(eventOverlap, _) {
+  if (eventOverlap) {
+    return getStyledOverlappingEvents(...arguments)
+  } else {
+    return getStyledNonOverlappingEvents(...arguments)
+  }
+}
+
+function getStyledNonOverlappingEvents(
   eventOverlap,
-  { events, minimumStartDifference, slotMetrics, accessors }
+  { events, _, slotMetrics, accessors }
 ) {
   const proxies = events.map(
     event => new Event(event, eventOverlap, { slotMetrics, accessors })
@@ -187,29 +196,20 @@ function getStyledEvents(
 
   for (let i = 0; i < eventsInRenderOrder.length; i++) {
     const event = eventsInRenderOrder[i]
-    // debugger
 
     // Check if this event can go into a container event.
     let container = containerEvents.find(
-      c =>
-        c.containerEnd > event.start + c.overlapBuffer ||
-        (eventOverlap &&
-          Math.abs(event.start - c.start) < minimumStartDifference)
+      c => c.containerEnd > event.start + c.overlapBuffer
     )
 
     // Couldn't find a container — that means this event is a container.
-    if (!container && eventOverlap) {
-      event.rows = []
-      event.isContainer = true
-      containerEvents.push(event)
-      continue
-    } else if (!container && !eventOverlap) {
+    if (!container) {
       container = new Event(event.data, false, { slotMetrics, accessors })
       container.rows = []
       container.isContainer = true
       container.overlapBuffer = calculateContainerOverlapBuffer(container)
       container.rootContainer = container
-
+      container.parentContainer = container
       containerEvents.push(container)
     }
 
@@ -217,11 +217,12 @@ function getStyledEvents(
     event.container = container
 
     // Expand the container if possible
-    if (event.end > container.containerEnd && !eventOverlap) {
+    if (event.end > container.containerEnd) {
       container.containerEnd = event.end
       container.overlapBuffer = calculateContainerOverlapBuffer(container)
     }
 
+    // See if the event can fit into a child container
     for (let i = childContainerEvents.length - 1; i >= 0; i--) {
       const currentContainer = childContainerEvents[i]
       if (
@@ -230,39 +231,26 @@ function getStyledEvents(
       ) {
         container = currentContainer
         event.container = container
-      }
 
-      if (event.end > container.containerEnd && !eventOverlap) {
-        container.containerEnd = event.end
-        container.rootContainer.containerEnd = Math.max(
-          event.end,
-          container.rootContainer.containerEnd
-        )
-        container.rootContainer.overlapBuffer = calculateContainerOverlapBuffer(
-          container.rootContainer
-        )
+        if (event.end > container.containerEnd) {
+          container.containerEnd = event.end
+          container.rootContainer.containerEnd = Math.max(
+            event.end,
+            container.rootContainer.containerEnd
+          )
+          container.rootContainer.overlapBuffer = calculateContainerOverlapBuffer(
+            container.rootContainer
+          )
+        }
+        break
       }
-      break
     }
 
-    // Check if the event can be placed in an existing row.
-    // Start looking from behind.
-    let row = null
-    for (let j = container.rows.length - 1; !row && j >= 0; j--) {
-      if (
-        onSameRow(
-          container.rows[j],
-          event,
-          minimumStartDifference,
-          eventOverlap
-        )
-      ) {
-        row = container.rows[j]
-      }
-    }
+    // Each container only has one row using the non overlapping algorithm
+    let row = container.rows[0]
 
     // Look back to see if a child container should be created from the row
-    if (!eventOverlap && row) {
+    if (row) {
       let rowAndLeaves
       if (row.leaves) {
         rowAndLeaves = [row, ...row.leaves]
@@ -274,32 +262,28 @@ function getStyledEvents(
         let newContainerEvent = rowAndLeaves
           .reverse()
           .find(e => e.end > event.start)
-        let newContainer
-        let sibling = false
-        if (newContainerEvent) {
-          newContainer = new Event(newContainerEvent.data, false, {
-            slotMetrics,
-            accessors,
-          })
-        } else {
-          newContainer = new Event(row.container.data, false, {
-            slotMetrics,
-            accessors,
-          })
-          sibling = true
-        }
+
+        /* If a container cannot be made from any of the events of the previous container,
+         * then a child container must be made of the current container's parent which makes the child
+         * container a sibling of the current container */
+        let isSibling = newContainerEvent ? false : true
+        newContainerEvent = newContainerEvent
+          ? newContainerEvent
+          : row.container
+
+        const newContainer = new Event(newContainerEvent.data, false, {
+          slotMetrics,
+          accessors,
+        })
 
         newContainer.isContainer = true
         newContainer.rows = []
-        newContainer.overlapBuffer = calculateContainerOverlapBuffer(
-          newContainer
-        )
-        newContainer.parentContainer = sibling
+
+        newContainer.parentContainer = isSibling
           ? container.parentContainer
           : container
+
         newContainer.rootContainer = container.rootContainer
-        // newContainer.containerEnd = newContainer.parentContainer.containerEnd
-        container.childContainer = newContainer
         container = newContainer
         childContainerEvents.push(container)
         row = null
@@ -331,6 +315,75 @@ function getStyledEvents(
 
   assignContainerXOffsets(containerEvents)
   assignChildContainerXOffsets(childContainerEvents)
+
+  // Return the original events, along with their styles.
+  return eventsInRenderOrder.map(event => ({
+    event: event.data,
+    style: {
+      top: event.top,
+      height: event.height,
+      width: event.width,
+      xOffset: event.xOffset,
+      zIndex: Math.floor(event.xOffset),
+    },
+  }))
+}
+
+function getStyledOverlappingEvents(
+  eventOverlap,
+  { events, minimumStartDifference, slotMetrics, accessors }
+) {
+  const proxies = events.map(
+    event => new Event(event, eventOverlap, { slotMetrics, accessors })
+  )
+  const eventsInRenderOrder = sortByRender(proxies)
+
+  // Group overlapping events, while keeping order.
+  // Every event is always one of: container, row or leaf.
+  // Containers can contain rows, and rows can contain leaves.
+  const containerEvents = []
+
+  for (let i = 0; i < eventsInRenderOrder.length; i++) {
+    const event = eventsInRenderOrder[i]
+
+    // Check if this event can go into a container event.
+    let container = containerEvents.find(
+      c =>
+        c.containerEnd > event.start ||
+        Math.abs(event.start - c.start) < minimumStartDifference
+    )
+
+    // Couldn't find a container — that means this event is a container.
+    if (!container) {
+      event.rows = []
+      event.isContainer = true
+      containerEvents.push(event)
+      continue
+    }
+
+    // Found a container for the event.
+    event.container = container
+
+    // Check if the event can be placed in an existing row.
+    // Start looking from behind.
+    let row = null
+    for (let j = container.rows.length - 1; !row && j >= 0; j--) {
+      if (onSameRow(container.rows[j], event, minimumStartDifference)) {
+        row = container.rows[j]
+      }
+    }
+
+    if (row) {
+      // Found a row, so add it.
+      row.leaves.push(event)
+      event.row = row
+    } else {
+      // Couldn't find a row – that means this event is a row.
+      event.leaves = []
+      container.rows.push(event)
+    }
+  }
+
   // Return the original events, along with their styles.
   return eventsInRenderOrder.map(event => ({
     event: event.data,
