@@ -25,6 +25,8 @@ class Event {
     this.containerXOffset = 0
     this.parentContainer = null
     this.rootContainer = null
+    this.children = 0
+    this.childContainerEvents = []
   }
 
   /**
@@ -152,22 +154,24 @@ function assignContainerXOffsets(containerEvents) {
 }
 
 function assignChildContainerXOffsets(containerEvents) {
-  containerEvents.forEach(container => {
-    let currentContainer = container
-    const parentContainer = currentContainer.parentContainer
-    const parentRow = parentContainer.rows[0]
-    const leaves = parentRow.leaves
-    const rowAndLeaves = [parentRow, ...leaves]
+  containerEvents.forEach(containerEvent => {
+    containerEvent.childContainerEvents.forEach(childContainer => {
+      let currentContainer = childContainer
+      const parentContainer = currentContainer.parentContainer
+      const parentRow = parentContainer.rows[0]
+      const leaves = parentRow.leaves
+      const rowAndLeaves = [parentRow, ...leaves]
 
-    // Find the X Offset of the event after the child container
-    for (let i = 0; i < rowAndLeaves.length - 1; i++) {
-      if (
-        currentContainer.start === rowAndLeaves[i].start &&
-        currentContainer.end === rowAndLeaves[i].end
-      ) {
-        currentContainer.containerXOffset = rowAndLeaves[i + 1].xOffset
+      // Find the X Offset of the event after the child container
+      for (let i = 0; i < rowAndLeaves.length - 1; i++) {
+        if (
+          currentContainer.start === rowAndLeaves[i].start &&
+          currentContainer.end === rowAndLeaves[i].end
+        ) {
+          currentContainer.containerXOffset = rowAndLeaves[i + 1].xOffset
+        }
       }
-    }
+    })
   })
 }
 
@@ -192,7 +196,6 @@ function getStyledNonOverlappingEvents(
   // Every event is always one of: container, row or leaf.
   // Containers can contain rows, and rows can contain leaves.
   const containerEvents = []
-  const childContainerEvents = []
 
   for (let i = 0; i < eventsInRenderOrder.length; i++) {
     const event = eventsInRenderOrder[i]
@@ -223,8 +226,8 @@ function getStyledNonOverlappingEvents(
     }
 
     // See if the event can fit into a child container
-    for (let i = childContainerEvents.length - 1; i >= 0; i--) {
-      const currentContainer = childContainerEvents[i]
+    for (let i = container.childContainerEvents.length - 1; i >= 0; i--) {
+      const currentContainer = container.childContainerEvents[i]
       if (
         currentContainer.start <= event.start &&
         currentContainer.containerEnd > event.start
@@ -284,8 +287,8 @@ function getStyledNonOverlappingEvents(
           : container
 
         newContainer.rootContainer = container.rootContainer
+        container.rootContainer.childContainerEvents.push(newContainer)
         container = newContainer
-        childContainerEvents.push(container)
         row = null
         event.container = container
 
@@ -314,7 +317,7 @@ function getStyledNonOverlappingEvents(
   }
 
   assignContainerXOffsets(containerEvents)
-  assignChildContainerXOffsets(childContainerEvents)
+  assignChildContainerXOffsets(containerEvents)
 
   // Return the original events, along with their styles.
   return eventsInRenderOrder.map(event => ({
