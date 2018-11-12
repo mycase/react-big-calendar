@@ -80,6 +80,8 @@ export default class TimeGrid extends Component {
     ) {
       this.calculateScroll(nextProps)
     }
+
+    this.resources = Resources(nextProps.resources, nextProps.accessors)
   }
 
   gutterRef = ref => {
