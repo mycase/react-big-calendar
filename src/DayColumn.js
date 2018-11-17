@@ -10,6 +10,8 @@ import { isSelected } from './utils/selection'
 
 import { notify } from './utils/helpers'
 import * as DayEventLayout from './utils/DayEventLayout'
+import * as DayEventNonOverlapLayout from './utils/DayEventNonOverlapLayout'
+
 import TimeSlotGroup from './TimeSlotGroup'
 import TimeGridEvent from './TimeGridEvent'
 
@@ -189,12 +191,22 @@ class DayColumn extends React.Component {
     const { slotMetrics } = this
     const { messages } = localizer
 
-    let styledEvents = DayEventLayout.getStyledEvents(eventOverlap, {
-      events,
-      accessors,
-      slotMetrics,
-      minimumStartDifference: Math.ceil((step * timeslots) / 2),
-    })
+    let styledEvents
+
+    if (eventOverlap) {
+      styledEvents = DayEventLayout.getStyledEvents({
+        events,
+        accessors,
+        slotMetrics,
+        minimumStartDifference: Math.ceil((step * timeslots) / 2),
+      })
+    } else {
+      styledEvents = DayEventNonOverlapLayout.getStyledEvents({
+        events,
+        accessors,
+        slotMetrics,
+      })
+    }
 
     styledEvents = styledEvents.filter(({ _, style }) => style.width > 0)
 
