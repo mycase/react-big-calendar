@@ -21,16 +21,23 @@ class Event {
   }
 }
 
+function eventsOverlap(a, b) {
+  return (
+    (a.start < b.end && b.start < a.end) || (b.start < a.end && a.start < b.end)
+  )
+}
+
 function assignEventPositioning(events, columns) {
   const numberOfColumns = columns.length
   const widthPerColumn = 100 / numberOfColumns
 
+  // First pass, assign initial widths and z-indexes without optimization
   events.forEach(event => {
     let indexOfOverlap = numberOfColumns
 
     // Find the column that contains an event that overlaps with the current event
     for (let i = event.column + 1; i < numberOfColumns; i++) {
-      const overlap = columns[i].find(c => c.end > event.start)
+      const overlap = columns[i].find(c => eventsOverlap(c, event))
 
       if (overlap) {
         indexOfOverlap = i
@@ -41,6 +48,52 @@ function assignEventPositioning(events, columns) {
     event.indexOfOverlap = indexOfOverlap
     event.width = (indexOfOverlap - event.column) * widthPerColumn
     event.xOffset = event.column * widthPerColumn
+  })
+
+  events.forEach(event => {
+    let widthToDistribute = event.width
+    let stack = []
+
+    /* If the event fills up the remaining width of the window, see if that width can be
+     * distributed to some events to the left */
+    if (event.width > widthPerColumn && event.column !== 0 && !event.adjusted) {
+      let currentEvent = event
+      for (let i = event.column; i > 0; i--) {
+        let overlappingEvents = columns[i - 1].filter(c =>
+          eventsOverlap(c, currentEvent)
+        )
+        if (overlappingEvents.length === 1) {
+          currentEvent = overlappingEvents[0]
+          overlappingEvents = columns[i].filter(c =>
+            eventsOverlap(c, currentEvent)
+          )
+
+          if (overlappingEvents.length === 1 && !currentEvent.adjusted) {
+            widthToDistribute += currentEvent.width
+            stack.push(currentEvent)
+          } else {
+            break
+          }
+        }
+      }
+    }
+
+    if (stack.length > 0) {
+      const normalizedEventWidth = widthToDistribute / (stack.length + 1)
+      event.xOffset = event.xOffset + (event.width - normalizedEventWidth)
+      event.width = normalizedEventWidth
+      event.adjusted = true
+
+      stack[0].xOffset = event.xOffset - normalizedEventWidth
+      stack[0].width = normalizedEventWidth
+      stack[0].adjusted = true
+
+      for (let i = 1; i < stack.length; i++) {
+        stack[i].xOffset = stack[i - 1].xOffset + -normalizedEventWidth
+        stack[i].width = normalizedEventWidth
+        stack[i].adjusted = true
+      }
+    }
   })
 }
 
@@ -58,7 +111,7 @@ function getStyledEvents({ events, slotMetrics, accessors }) {
 
     // Check each column to see where the event can fit without overlapping other events
     for (let columnIndex = 0; columnIndex < columns.length; columnIndex++) {
-      const overlap = columns[columnIndex].find(c => c.end > event.start)
+      const overlap = columns[columnIndex].find(c => eventsOverlap(c, event))
 
       // Add the event to the current column if it doesn't overlap
       if (!overlap) {
@@ -77,6 +130,9 @@ function getStyledEvents({ events, slotMetrics, accessors }) {
 
   assignEventPositioning(eventsInRenderOrder, columns)
 
+  //Assign z-indexes to events from top to bottom descending
+  let zIndexCtr = eventsInRenderOrder.length
+
   // Return the original events, along with their styles.
   return eventsInRenderOrder.map(event => ({
     event: event.data,
@@ -85,7 +141,7 @@ function getStyledEvents({ events, slotMetrics, accessors }) {
       height: event.height,
       width: event.width,
       xOffset: event.xOffset,
-      zIndex: Math.floor(event.xOffset),
+      zIndex: zIndexCtr--,
     },
   }))
 }
