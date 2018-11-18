@@ -208,8 +208,6 @@ class DayColumn extends React.Component {
       })
     }
 
-    styledEvents = styledEvents.filter(({ _, style }) => style.width > 0)
-
     return styledEvents.map(({ event, style }, idx) => {
       let end = accessors.end(event)
       let start = accessors.start(event)
