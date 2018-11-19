@@ -50,6 +50,11 @@ function assignEventPositioning(events, columns) {
     event.xOffset = event.column * widthPerColumn
   })
 
+  // Reposition and adjust widths of events based on last event in a logical row
+  redistributeEventWidths(events, columns, widthPerColumn)
+}
+
+function redistributeEventWidths(events, columns, widthPerColumn) {
   events.forEach(event => {
     let widthToDistribute = event.width
     let stack = []
@@ -62,6 +67,8 @@ function assignEventPositioning(events, columns) {
         let overlappingEvents = columns[i - 1].filter(c =>
           eventsOverlap(c, currentEvent)
         )
+
+        // Only allow width redistribution to next event if it only overlaps with the current event
         if (overlappingEvents.length === 1) {
           currentEvent = overlappingEvents[0]
           overlappingEvents = columns[i].filter(c =>
@@ -78,18 +85,21 @@ function assignEventPositioning(events, columns) {
       }
     }
 
+    // Reposition events based on redistributed width, starting with current event
     if (stack.length > 0) {
       const normalizedEventWidth = widthToDistribute / (stack.length + 1)
       event.xOffset = event.xOffset + (event.width - normalizedEventWidth)
       event.width = normalizedEventWidth
       event.adjusted = true
 
-      stack[0].xOffset = event.xOffset - normalizedEventWidth
-      stack[0].width = normalizedEventWidth
-      stack[0].adjusted = true
+      const adjacentEvent = stack[0]
+
+      adjacentEvent.xOffset = event.xOffset - normalizedEventWidth
+      adjacentEvent.width = normalizedEventWidth
+      adjacentEvent.adjusted = true
 
       for (let i = 1; i < stack.length; i++) {
-        stack[i].xOffset = stack[i - 1].xOffset + -normalizedEventWidth
+        stack[i].xOffset = stack[i - 1].xOffset - normalizedEventWidth
         stack[i].width = normalizedEventWidth
         stack[i].adjusted = true
       }
